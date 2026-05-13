@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+venv/
+.venv/
+
+# Databases (SQLite)
+*.db
+*.sqlite
+*.sqlite3
+
+# Scan output files
+nikto_*.json
+*_scan_*.json
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Environment & secrets
+.env
+.env.*
+*.secret
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Logs
+*.log
+logs/
+
+# Generated reports
+*.pdf
+backend/reports/
