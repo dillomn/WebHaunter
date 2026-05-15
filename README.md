@@ -35,13 +35,21 @@ brew install nmap pango
 sudo apt install nmap libpango-1.0-0 libpangoft2-1.0-0
 ```
 
+**Windows**
+
+1. Install [Nmap for Windows](https://nmap.org/download.html#windows) — tick *Add Nmap to PATH* during setup
+2. Install [GTK3 runtime](https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer/releases) (required by WeasyPrint for PDF generation)
+
 ### Python
 
-Python 3.11+ is required. Check with `python3 --version`.
+Python 3.11+ is required. Download from [python.org](https://www.python.org/downloads/) if not already installed.  
+Check with `python --version` (Windows) or `python3 --version` (macOS/Linux).
 
 ---
 
 ## Deploy
+
+### macOS / Linux
 
 ```bash
 # 1. Clone
@@ -58,7 +66,26 @@ venv/bin/pip install -r backend/requirements.txt
 ./start.sh
 ```
 
+### Windows
+
+```powershell
+# 1. Clone
+git clone https://github.com/dillomn/WebHaunter.git
+cd WebHaunter
+
+# 2. Create virtualenv
+python -m venv venv
+
+# 3. Install Python dependencies
+venv\Scripts\pip install -r backend\requirements.txt
+
+# 4. Start
+venv\Scripts\python backend\main.py
+```
+
 Open **http://localhost:8000**, create an account, and start scanning.
+
+> **Note:** `start.sh` is a bash script and won't run on Windows. Use the PowerShell command above instead. All other functionality is identical.
 
 ---
 
@@ -116,9 +143,16 @@ Recognised label fields: `name`, `label`, `client`, `client_name`, `hostname`
 
 CVE lookups work without a key but are rate-limited to 5 requests/second. For faster enrichment on large scans, set an API key:
 
+**macOS / Linux**
 ```bash
 export NVD_API_KEY=your-key-here
 ./start.sh
+```
+
+**Windows**
+```powershell
+$env:NVD_API_KEY="your-key-here"
+venv\Scripts\python backend\main.py
 ```
 
 Get a free key at https://nvd.nist.gov/developers/request-an-api-key
