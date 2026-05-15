@@ -3,20 +3,30 @@ import re
 import xml.etree.ElementTree as ET
 
 
-async def run_nmap(target: str, progress_callback=None) -> dict:
+async def run_nmap(targets: list[str] | str, ports: str = "top1000", progress_callback=None) -> dict:
     """Run nmap service/version detection and return structured results."""
-    if progress_callback:
-        await progress_callback("nmap", 10, "Starting nmap scan...")
+    if isinstance(targets, str):
+        targets = [targets]
 
-    # -sT = TCP connect scan (works without root, unlike default SYN scan)
-    # -sV = version detection
-    # No -O (OS detection requires root) or -sC (scripts can hang)
-    cmd = [
-        "nmap", "-sT", "-sV", "--version-intensity", "5",
-        "-T4", "--open",
-        "-oX", "-",  # XML to stdout
-        target
-    ]
+    if progress_callback:
+        label = targets[0] if len(targets) == 1 else f"{len(targets)} targets"
+        await progress_callback("nmap", 10, f"Starting nmap scan on {label}...")
+
+    cmd = ["nmap", "-sT", "-sV", "--version-intensity", "5", "-T4", "--open", "-oX", "-"]
+
+    if ports == "top100":
+        cmd.extend(["--top-ports", "100"])
+    elif ports == "top10k":
+        cmd.extend(["--top-ports", "10000"])
+    elif ports == "allports":
+        cmd.append("-p-")
+    elif ports not in ("top1000", "default", "", None):
+        # Custom spec — already validated by the API layer
+        cmd.extend(["-p", ports])
+    else:
+        cmd.extend(["--top-ports", "1000"])
+
+    cmd.extend(targets)
 
     try:
         proc = await asyncio.create_subprocess_exec(

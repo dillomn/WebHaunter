@@ -2,15 +2,16 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #0d0118;
-  --surface: #130228;
-  --surface2: #1f0a38;
-  --border: #4a1d78;
+  --bg: #0a0a0a;
+  --surface: #111111;
+  --surface2: #1a1a1a;
+  --border: #2a2a2a;
+  --border-accent: #5b21b6;
   --accent: #c084fc;
   --accent2: #9333ea;
-  --text: #f0e8ff;
-  --text-dim: #b89fd8;
-  --text-faint: #7c5fa0;
+  --text: #f5f5f5;
+  --text-dim: #a0a0a0;
+  --text-faint: #555555;
   --critical: #ef4444;
   --high: #f97316;
   --medium: #f59e0b;
@@ -18,7 +19,7 @@
   --info: #a78bfa;
   --success: #10b981;
   --radius: 8px;
-  --shadow: 0 4px 24px rgba(0,0,0,0.6);
+  --shadow: 0 4px 24px rgba(0,0,0,0.8);
 }
 
 html, body {
@@ -63,6 +64,8 @@ html, body {
   width: 38px;
   object-fit: contain;
   filter: invert(1) hue-rotate(180deg) brightness(1.1) drop-shadow(0 0 6px rgba(192,132,252,0.8));
+  animation: ghost-float 6.7s linear infinite, ghost-glow 4.1s ease-in-out infinite;
+  animation-delay: 0s, -1.6s;
 }
 .logo .logo-sub { color: var(--text-faint); font-weight: 400; font-size: 11px; letter-spacing: 1px; margin-left: 4px; }
 
@@ -86,7 +89,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at 50% 20%, #2d0a54 0%, #0d0118 65%);
+  background: radial-gradient(ellipse at 50% 20%, #1a0a2e 0%, #0a0a0a 70%);
 }
 
 .auth-card {
@@ -96,7 +99,7 @@ html, body {
   padding: 40px;
   width: 100%;
   max-width: 420px;
-  box-shadow: 0 0 60px rgba(192,132,252,0.1), var(--shadow);
+  box-shadow: 0 0 40px rgba(192,132,252,0.06), var(--shadow);
 }
 
 .auth-logo {
@@ -111,6 +114,8 @@ html, body {
   width: 80px;
   object-fit: contain;
   filter: invert(1) hue-rotate(180deg) brightness(1.1) drop-shadow(0 0 16px rgba(192,132,252,1));
+  animation: ghost-float 8.3s linear infinite, ghost-glow 3.7s ease-in-out infinite;
+  animation-delay: -3.2s, -0.9s;
 }
 .auth-logo-text {
   font-size: 26px;
@@ -131,7 +136,8 @@ html, body {
 .form-group { margin-bottom: 16px; }
 .form-group label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px; }
 
-input[type=text], input[type=email], input[type=password], input[type=url], select, textarea {
+textarea { resize: vertical; min-height: 80px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.7; }
+input[type=text], input[type=email], input[type=password], input[type=url], input[type=time], select, textarea {
   width: 100%;
   background: var(--surface2);
   border: 1px solid var(--border);
@@ -141,8 +147,10 @@ input[type=text], input[type=email], input[type=password], input[type=url], sele
   font-size: 14px;
   outline: none;
   transition: border-color 0.2s;
+  box-sizing: border-box;
 }
-input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+input[type=time]::-webkit-calendar-picker-indicator { filter: invert(1) opacity(0.4); cursor: pointer; }
+input[type=time]::-webkit-datetime-edit-fields-wrapper { color: var(--text); }input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 input::placeholder { color: var(--text-faint); }
 
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
@@ -412,6 +420,67 @@ input::placeholder { color: var(--text-faint); }
   display: inline-block;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Ghost float ─────────────────────────────────────────────────────────── */
+@keyframes ghost-float {
+  0%   { transform: translate(0px,  0px)  rotate(0deg);    animation-timing-function: cubic-bezier(0.42,0,0.58,1); }
+  6%   { transform: translate(1px, -2px)  rotate(0.5deg);  animation-timing-function: ease-in; }
+  13%  { transform: translate(2px, -4px)  rotate(-0.3deg); animation-timing-function: cubic-bezier(0.25,0.46,0.45,0.94); }
+  19%  { transform: translate(1px, -6px)  rotate(0.8deg);  animation-timing-function: ease-out; }
+  26%  { transform: translate(-1px,-4px)  rotate(-0.6deg); animation-timing-function: cubic-bezier(0.55,0.06,0.68,0.19); }
+  33%  { transform: translate(-3px,-2px)  rotate(-1deg);   animation-timing-function: ease-in-out; }
+  39%  { transform: translate(-2px,-5px)  rotate(0.3deg);  animation-timing-function: cubic-bezier(0.42,0,1,1); }
+  46%  { transform: translate(0px, -7px)  rotate(0.7deg);  animation-timing-function: ease-in; }
+  52%  { transform: translate(3px, -4px)  rotate(-0.4deg); animation-timing-function: cubic-bezier(0.12,0.57,0.63,0.21); }
+  58%  { transform: translate(2px, -6px)  rotate(0.9deg);  animation-timing-function: ease-out; }
+  65%  { transform: translate(-1px,-3px)  rotate(-0.2deg); animation-timing-function: cubic-bezier(0.4,0,0.6,1); }
+  71%  { transform: translate(-2px,-5px)  rotate(-0.7deg); animation-timing-function: ease-in; }
+  78%  { transform: translate(-1px,-2px)  rotate(0.6deg);  animation-timing-function: cubic-bezier(0.23,1,0.32,1); }
+  84%  { transform: translate(2px, -3px)  rotate(-0.8deg); animation-timing-function: ease-in-out; }
+  91%  { transform: translate(1px, -1px)  rotate(0.2deg);  animation-timing-function: cubic-bezier(0.42,0,0.58,1); }
+  97%  { transform: translate(0px, -1px)  rotate(-0.1deg); animation-timing-function: ease-out; }
+  100% { transform: translate(0px,  0px)  rotate(0deg); }
+}
+
+@keyframes ghost-glow {
+  0%, 100% { opacity: 1; }
+  28%      { opacity: 0.6; }
+  55%      { opacity: 0.85; }
+  73%      { opacity: 0.5; }
+  89%      { opacity: 0.9; }
+}
+
+/* ── Dashboard tabs ──────────────────────────────────────────────────────── */
+.dash-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+.dash-tab {
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.2s;
+}
+.dash-tab:hover { color: var(--text); }
+.dash-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── Port preset buttons ─────────────────────────────────────────────────── */
+.port-presets { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.preset-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  transition: all 0.15s;
+}
+.preset-btn:hover { border-color: var(--accent); color: var(--accent); }
+.preset-btn.active { border-color: var(--accent); background: rgba(192,132,252,0.1); color: var(--accent); }
 
 /* ── Monospace ───────────────────────────────────────────────────────────── */
 .mono { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }

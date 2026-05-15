@@ -51,7 +51,7 @@ function renderTopbar() {
   const user = getUser();
   return `
   <div class="topbar">
-    <div class="logo" onclick="location.hash='#/'">
+    <div class="logo" onclick="renderDashboard()">
       <img class="logo-img" src="/static/img/haunter.png" alt="">
       WEB HAUNTER
     </div>
@@ -146,6 +146,7 @@ document.addEventListener('submit', async (e) => {
       setUser({ username: data.username });
       currentUser = { username: data.username };
       location.hash = '#/';
+      renderDashboard();
     } else {
       const err = await res.json();
       if (alertEl) alertEl.innerHTML = `<div class="alert alert-error">${esc(err.detail)}</div>`;
@@ -168,6 +169,7 @@ document.addEventListener('submit', async (e) => {
       setUser({ username: data.username });
       currentUser = { username: data.username };
       location.hash = '#/';
+      renderDashboard();
     } else if (res) {
       const err = await res.json();
       if (alertEl) alertEl.innerHTML = `<div class="alert alert-error">${esc(err.detail)}</div>`;
@@ -177,40 +179,128 @@ document.addEventListener('submit', async (e) => {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
-async function renderDashboard() {
+let dashTab = 'scans';
+
+async function renderDashboard(tab) {
+  if (tab) dashTab = tab;
   app().innerHTML = renderTopbar() + `
   <div class="main">
     <div class="page-header">
       <h1>Dashboard</h1>
-      <div class="subtitle">Your vulnerability scan history</div>
+      <div class="subtitle">Vulnerability assessment platform</div>
     </div>
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-      <div id="scan-count" style="color:var(--text-dim); font-size:13px;"></div>
-      <button class="btn btn-primary" onclick="renderNewScan()">+ New Scan</button>
+    <div class="dash-tabs">
+      <div class="dash-tab ${dashTab === 'scans' ? 'active' : ''}" onclick="renderDashboard('scans')">Scan History</div>
+      <div class="dash-tab ${dashTab === 'schedules' ? 'active' : ''}" onclick="renderDashboard('schedules')">Schedules</div>
     </div>
-    <div id="scan-list"><div style="text-align:center;padding:40px;"><div class="spinner"></div></div></div>
+    <div id="dash-content"><div style="text-align:center;padding:40px;"><div class="spinner"></div></div></div>
   </div>`;
+
+  if (dashTab === 'schedules') {
+    await renderSchedulesTab();
+  } else {
+    await renderScansTab();
+  }
+}
+
+async function renderScansTab() {
+  const content = document.getElementById('dash-content');
+  content.innerHTML = `
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+    <div id="scan-count" style="color:var(--text-dim); font-size:13px;"></div>
+    <button class="btn btn-primary" onclick="renderNewScan()">+ New Scan</button>
+  </div>
+  <div id="scan-list"><div style="text-align:center;padding:40px;"><div class="spinner"></div></div></div>`;
 
   const res = await apiFetch('/api/scans');
   if (!res) return;
   const scans = await res.json();
 
-  const listEl = document.getElementById('scan-list');
-  const countEl = document.getElementById('scan-count');
-  countEl.textContent = `${scans.length} scan${scans.length !== 1 ? 's' : ''}`;
+  document.getElementById('scan-count').textContent = `${scans.length} scan${scans.length !== 1 ? 's' : ''}`;
 
+  const listEl = document.getElementById('scan-list');
   if (!scans.length) {
     listEl.innerHTML = `
     <div class="empty-state">
-      <div class="empty-icon">🔍</div>
       <p>No scans yet. Start your first assessment.</p>
       <br>
       <button class="btn btn-primary" onclick="renderNewScan()">+ New Scan</button>
     </div>`;
     return;
   }
-
   listEl.innerHTML = `<div class="scan-list">${scans.map(scanItem).join('')}</div>`;
+}
+
+async function renderSchedulesTab() {
+  const content = document.getElementById('dash-content');
+  content.innerHTML = `
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+    <div style="color:var(--text-dim); font-size:13px;" id="sched-count"></div>
+    <button class="btn btn-primary" onclick="renderNewScan(true)">+ New Schedule</button>
+  </div>
+  <div id="sched-list"><div style="text-align:center;padding:40px;"><div class="spinner"></div></div></div>`;
+
+  const res = await apiFetch('/api/schedules');
+  if (!res) return;
+  const schedules = await res.json();
+
+  document.getElementById('sched-count').textContent = `${schedules.length} schedule${schedules.length !== 1 ? 's' : ''}`;
+
+  const listEl = document.getElementById('sched-list');
+  if (!schedules.length) {
+    listEl.innerHTML = `
+    <div class="empty-state">
+      <p>No schedules yet. Create a recurring scan.</p>
+      <br>
+      <button class="btn btn-primary" onclick="renderNewScan(true)">+ New Schedule</button>
+    </div>`;
+    return;
+  }
+  listEl.innerHTML = `<div class="scan-list">${schedules.map(scheduleItem).join('')}</div>`;
+}
+
+function scheduleItem(s) {
+  const targets = s.targets || [];
+  const targetText = targets.length === 1
+    ? (targets[0].label || targets[0].host)
+    : `${targets.length} targets`;
+  const lastRun = s.last_run_at ? new Date(s.last_run_at).toLocaleString() : 'Never';
+  const nextRun = s.next_run_at ? new Date(s.next_run_at).toLocaleString() : '—';
+  const modules = s.modules.map(m => `<span class="tag">${esc(moduleLabel(m))}</span>`).join(' ');
+
+  return `
+  <div class="scan-item" style="cursor:default;">
+    <div class="scan-item-left" style="flex:1;">
+      <div class="scan-item-target">${esc(s.scan_name)}</div>
+      <div class="scan-item-meta">${esc(targetText)} &nbsp;·&nbsp; ${esc(s.interval_label)} at ${esc(s.run_time || '00:00')} &nbsp;·&nbsp; ${modules}</div>
+      <div class="scan-item-meta" style="margin-top:2px;">Last run: ${lastRun} &nbsp;·&nbsp; Next: ${nextRun}</div>
+    </div>
+    <div class="scan-item-right" style="gap:8px; flex-wrap:wrap;">
+      <span class="badge ${s.enabled ? 'badge-completed' : 'badge-pending'}">${s.enabled ? 'Active' : 'Paused'}</span>
+      <button class="btn btn-secondary btn-sm" onclick="runScheduleNow(${s.id})">Run Now</button>
+      <button class="btn btn-secondary btn-sm" onclick="toggleSchedule(${s.id})">${s.enabled ? 'Pause' : 'Resume'}</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteSchedule(${s.id})">Delete</button>
+    </div>
+  </div>`;
+}
+
+async function runScheduleNow(id) {
+  const res = await apiFetch(`/api/schedules/${id}/run`, { method: 'POST' });
+  if (res && res.ok) {
+    const data = await res.json();
+    location.hash = `#/scan/${data.scan_id}`;
+  }
+}
+
+async function toggleSchedule(id) {
+  await apiFetch(`/api/schedules/${id}/toggle`, { method: 'PATCH' });
+  renderDashboard('schedules');
+}
+
+async function deleteSchedule(id) {
+  if (!confirm('Delete this schedule?')) return;
+  await apiFetch(`/api/schedules/${id}`, { method: 'DELETE' });
+  renderDashboard('schedules');
 }
 
 function scanItem(scan) {
@@ -237,41 +327,161 @@ async function deleteScan(id) {
 
 // ── New Scan ──────────────────────────────────────────────────────────────────
 
-function renderNewScan() {
+let portPreset = 'top1000';
+let scheduleMode = false;
+
+function selectPortPreset(preset) {
+  portPreset = preset;
+  document.querySelectorAll('.preset-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.preset === preset)
+  );
+  const row = document.getElementById('custom-port-row');
+  if (row) row.classList.toggle('hidden', preset !== 'custom');
+}
+
+function importTargetsFromJSON(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      let data = JSON.parse(e.target.result);
+
+      // Unwrap common wrapper keys: {clients:[...]}, {targets:[...]}, {hosts:[...]}, etc.
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        const wrapKey = ['clients','targets','hosts','ips','data','items','records'].find(k => Array.isArray(data[k]));
+        if (wrapKey) data = data[wrapKey];
+      }
+
+      let lines = [];
+
+      if (Array.isArray(data)) {
+        for (const entry of data) {
+          if (typeof entry === 'string') {
+            lines.push(entry.trim());
+          } else if (typeof entry === 'object' && entry !== null) {
+            // Detect host field
+            const hostVal = entry.ip ?? entry.host ?? entry.address ?? entry.ip_address ?? entry.target ?? null;
+            // Detect label field
+            const labelVal = entry.name ?? entry.label ?? entry.client ?? entry.client_name ?? entry.hostname ?? null;
+            if (hostVal) {
+              lines.push(labelVal ? `${String(labelVal).trim()} | ${String(hostVal).trim()}` : String(hostVal).trim());
+            }
+          }
+        }
+      } else if (typeof data === 'object' && data !== null) {
+        // Plain {name: ip} object
+        for (const [k, v] of Object.entries(data)) {
+          if (typeof v === 'string') lines.push(`${k.trim()} | ${v.trim()}`);
+        }
+      }
+
+      if (!lines.length) {
+        alert('No valid targets found in the JSON file.\n\nExpected formats:\n• [{name, ip}, ...]\n• [{client, address}, ...]\n• {"Client A": "1.2.3.4", ...}');
+        input.value = '';
+        return;
+      }
+
+      const textarea = document.getElementById('scan-targets');
+      if (textarea) textarea.value = lines.join('\n');
+      input.value = '';
+    } catch {
+      alert('Failed to parse JSON file. Make sure it is valid JSON.');
+      input.value = '';
+    }
+  };
+  reader.readAsText(file);
+}
+
+
+function toggleScheduleMode(on) {
+  scheduleMode = on;
+  document.querySelectorAll('.mode-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.mode === (on ? 'schedule' : 'once'))
+  );
+  const schedCard = document.getElementById('schedule-card');
+  if (schedCard) schedCard.classList.toggle('hidden', !on);
+  const btn = document.getElementById('launch-btn');
+  if (btn) btn.textContent = on ? 'Create Schedule' : 'Launch Scan';
+}
+
+function renderNewScan(startAsSchedule = false) {
+  portPreset = 'top1000';
+  scheduleMode = startAsSchedule;
   app().innerHTML = renderTopbar() + `
   <div class="main">
     <div class="page-header">
       <h1>New Scan</h1>
       <div class="subtitle">Configure and launch a vulnerability assessment</div>
     </div>
+
     <div class="card">
-      <div class="card-title"><span class="accent">01</span> Target</div>
+      <div class="card-title"><span class="accent">01</span> Targets</div>
       <div class="form-group">
         <label>Scan Name (optional)</label>
         <input type="text" id="scan-name" placeholder="e.g. Client Corp External Assessment">
       </div>
       <div class="form-group">
-        <label>Target Host / IP / Domain</label>
-        <input type="text" id="scan-target" placeholder="e.g. 192.168.1.1 or example.com" required>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+          <label style="margin-bottom:0;">Targets — one per line</label>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('json-import-input').click()">Import JSON</button>
+          <input type="file" id="json-import-input" accept=".json,application/json" style="display:none" onchange="importTargetsFromJSON(this)">
+        </div>
+        <textarea id="scan-targets" rows="6" placeholder="Client Corp | 192.168.1.1&#10;Head Office | 10.0.0.0/24&#10;203.0.113.42&#10;Remote Access Server | 203.0.113.99"></textarea>
+        <div style="font-size:11px; color:var(--text-faint); margin-top:5px;">Format: <span style="color:var(--accent); font-family:monospace;">Label | host</span> — or import a JSON file.</div>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title"><span class="accent">02</span> Scan Modules</div>
-      <div class="module-grid">
-        ${moduleCheckbox('nmap', 'Nmap', 'Service & version detection + OS fingerprinting', true)}
-        ${moduleCheckbox('gobuster_dir', 'Gobuster Dir', 'Directory & file enumeration', true)}
-        ${moduleCheckbox('gobuster_dns', 'Gobuster DNS', 'Subdomain enumeration', true)}
-        ${moduleCheckbox('nikto', 'Nikto', 'Web server vulnerability scan', true)}
-        ${moduleCheckbox('ssl', 'SSL/TLS', 'Certificate & protocol checks', true)}
-        ${moduleCheckbox('headers', 'HTTP Headers', 'Security header analysis', true)}
+      <div class="card-title"><span class="accent">02</span> Port Scope</div>
+      <div class="form-group">
+        <label>Preset</label>
+        <div class="port-presets">
+          <button class="preset-btn" data-preset="top100" onclick="selectPortPreset('top100')">Top 100</button>
+          <button class="preset-btn active" data-preset="top1000" onclick="selectPortPreset('top1000')">Top 1 000</button>
+          <button class="preset-btn" data-preset="top10k" onclick="selectPortPreset('top10k')">Top 10 000</button>
+          <button class="preset-btn" data-preset="allports" onclick="selectPortPreset('allports')">All Ports</button>
+          <button class="preset-btn" data-preset="custom" onclick="selectPortPreset('custom')">Custom</button>
+        </div>
+        <div id="custom-port-row" class="hidden" style="margin-top:8px;">
+          <input type="text" id="custom-ports" placeholder="e.g. 22,80,443,8080-9090,55000-56000">
+          <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">Comma-separated ports and ranges — nmap port syntax</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="accent">03</span> Run Mode</div>
+      <div class="port-presets" style="margin-bottom:0;">
+        <button class="mode-btn preset-btn ${scheduleMode ? '' : 'active'}" data-mode="once" onclick="toggleScheduleMode(false)">Run Once</button>
+        <button class="mode-btn preset-btn ${scheduleMode ? 'active' : ''}" data-mode="schedule" onclick="toggleScheduleMode(true)">Recurring Schedule</button>
+      </div>
+      <div id="schedule-card" class="${scheduleMode ? '' : 'hidden'}" style="margin-top:16px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Repeat Every</label>
+            <select id="schedule-interval">
+              <option value="1h">Every hour</option>
+              <option value="6h">Every 6 hours</option>
+              <option value="12h">Every 12 hours</option>
+              <option value="daily" selected>Daily</option>
+              <option value="3d">Every 3 days</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Run At</label>
+            <input type="time" id="schedule-time" value="02:00">
+          </div>
+        </div>
       </div>
     </div>
 
     <div id="launch-alert"></div>
     <div style="display:flex; gap:12px;">
-      <button class="btn btn-secondary" onclick="location.hash='#/'">Cancel</button>
-      <button class="btn btn-primary" onclick="launchScan()" id="launch-btn">Launch Scan</button>
+      <button class="btn btn-secondary" onclick="renderDashboard()">Cancel</button>
+      <button class="btn btn-primary" onclick="launchScan()" id="launch-btn">${scheduleMode ? 'Create Schedule' : 'Launch Scan'}</button>
     </div>
   </div>`;
 }
@@ -288,31 +498,69 @@ function moduleCheckbox(id, name, desc, checked) {
 }
 
 async function launchScan() {
-  const target = document.getElementById('scan-target').value.trim();
+  const targetsRaw = document.getElementById('scan-targets').value;
+  const targets = targetsRaw.split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const pipe = line.indexOf('|');
+      if (pipe !== -1) {
+        const label = line.slice(0, pipe).trim();
+        const host  = line.slice(pipe + 1).trim();
+        return host ? { host, label: label || undefined } : null;
+      }
+      return { host: line };
+    })
+    .filter(Boolean);
   const name = document.getElementById('scan-name').value.trim();
-  const modules = [...document.querySelectorAll('.module-checkbox input:checked')].map(el => el.value);
+  const modules = ['nmap'];
   const alertEl = document.getElementById('launch-alert');
 
-  if (!target) { alertEl.innerHTML = '<div class="alert alert-error">Please enter a target.</div>'; return; }
-  if (!modules.length) { alertEl.innerHTML = '<div class="alert alert-error">Select at least one module.</div>'; return; }
+  if (!targets.length) { alertEl.innerHTML = '<div class="alert alert-error">Enter at least one target.</div>'; return; }
+
+  let ports = portPreset;
+  if (portPreset === 'custom') {
+    ports = (document.getElementById('custom-ports')?.value || '').trim();
+    if (!ports) { alertEl.innerHTML = '<div class="alert alert-error">Enter a custom port range.</div>'; return; }
+  }
 
   const btn = document.getElementById('launch-btn');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Launching...';
 
-  const res = await apiFetch('/api/scans', {
-    method: 'POST',
-    body: JSON.stringify({ target, scan_name: name || target, modules }),
-  });
+  const firstTarget = targets[0];
+  const scanName = name || (targets.length === 1 ? (firstTarget.label || firstTarget.host) : `${targets.length} hosts`);
 
-  if (res && res.ok) {
-    const data = await res.json();
-    location.hash = `#/scan/${data.id}`;
-  } else if (res) {
-    const err = await res.json();
-    alertEl.innerHTML = `<div class="alert alert-error">${esc(err.detail)}</div>`;
-    btn.disabled = false;
-    btn.innerHTML = 'Launch Scan';
+  if (scheduleMode) {
+    const interval = document.getElementById('schedule-interval')?.value || 'daily';
+    const run_time = document.getElementById('schedule-time')?.value || '00:00';
+    btn.innerHTML = '<span class="spinner"></span> Creating...';
+    const res = await apiFetch('/api/schedules', {
+      method: 'POST',
+      body: JSON.stringify({ targets, scan_name: scanName, modules, ports, interval, run_time }),
+    });
+    if (res && res.ok) {
+      renderDashboard('schedules');
+    } else if (res) {
+      const err = await res.json();
+      alertEl.innerHTML = `<div class="alert alert-error">${esc(err.detail)}</div>`;
+      btn.disabled = false;
+      btn.textContent = 'Create Schedule';
+    }
+  } else {
+    btn.innerHTML = '<span class="spinner"></span> Launching...';
+    const res = await apiFetch('/api/scans', {
+      method: 'POST',
+      body: JSON.stringify({ targets, scan_name: scanName, modules, ports }),
+    });
+    if (res && res.ok) {
+      const data = await res.json();
+      location.hash = `#/scan/${data.id}`;
+    } else if (res) {
+      const err = await res.json();
+      alertEl.innerHTML = `<div class="alert alert-error">${esc(err.detail)}</div>`;
+      btn.disabled = false;
+      btn.textContent = 'Launch Scan';
+    }
   }
 }
 
@@ -336,7 +584,7 @@ async function renderScanDetail(id) {
             <h1>${esc(scan.scan_name || scan.target)}</h1>
             <span class="badge badge-${scan.status}" id="scan-status-badge">${scan.status}</span>
           </div>
-          <div class="subtitle" id="scan-subtitle">Target: ${esc(scan.target)} &nbsp;·&nbsp; Modules: ${scan.modules.join(', ')}</div>
+          <div class="subtitle" id="scan-subtitle">${renderTargetSubtitle(scan)} &nbsp;·&nbsp; Modules: ${scan.modules.join(', ')}${scan.ports && scan.ports !== 'top1000' ? ` &nbsp;·&nbsp; Ports: ${esc(scan.ports)}` : ''}</div>
         </div>
         <div style="display:flex; gap:8px;" id="action-btns">
           ${scan.status === 'completed' ? `<button class="btn btn-success btn-sm" onclick="exportPDF(${id})">Export PDF</button>` : ''}
@@ -380,8 +628,18 @@ function renderProgressList(progress) {
   }).join('');
 }
 
+function renderTargetSubtitle(scan) {
+  const targets = scan.targets || [{ host: scan.target }];
+  if (targets.length === 1) {
+    const t = targets[0];
+    return t.label ? `${esc(t.label)} — ${esc(t.host)}` : `Target: ${esc(t.host)}`;
+  }
+  const names = targets.slice(0, 3).map(t => esc(t.label || t.host)).join(', ');
+  return `${targets.length} targets: ${names}${targets.length > 3 ? ` +${targets.length - 3} more` : ''}`;
+}
+
 function moduleLabel(m) {
-  return { nmap: 'Nmap', gobuster_dir: 'Gobuster Dir', gobuster_dns: 'Gobuster DNS', nikto: 'Nikto', ssl: 'SSL/TLS', headers: 'HTTP Headers' }[m] || m;
+  return { nmap: 'Nmap', gobuster_dir: 'Gobuster Dir', gobuster_dns: 'Gobuster DNS', ssl: 'SSL/TLS', headers: 'HTTP Headers' }[m] || m;
 }
 
 function startSSE(scanId) {
@@ -445,9 +703,10 @@ function renderResults(scan) {
     `<div class="tab ${m === completedModules[0] ? 'active' : ''}" onclick="switchTab('${m}')" data-tab="${m}">${moduleLabel(m)}</div>`
   ).join('');
 
+  const targets = scan.targets || [{ host: scan.target }];
   const panels = completedModules.map(m =>
     `<div class="tab-content ${m === completedModules[0] ? 'active' : ''}" id="tab-${m}">
-      ${renderModuleResult(m, results[m])}
+      ${renderModuleResult(m, results[m], targets)}
     </div>`
   ).join('');
 
@@ -461,16 +720,15 @@ function switchTab(module) {
   document.getElementById(`tab-${module}`)?.classList.add('active');
 }
 
-function renderModuleResult(module, result) {
+function renderModuleResult(module, result, targets = []) {
   if (!result) return '<div class="alert alert-info">No results yet.</div>';
   if (result.error) return `<div class="alert alert-error">${esc(result.error)}</div>`;
   if (result.skipped) return `<div class="alert alert-info"><strong>Skipped:</strong> ${esc(result.reason)}</div>`;
 
   switch (module) {
-    case 'nmap': return renderNmap(result);
+    case 'nmap': return renderNmap(result, targets);
     case 'gobuster_dir': return renderGobusterDir(result);
     case 'gobuster_dns': return renderGobusterDns(result);
-    case 'nikto': return renderNikto(result);
     case 'ssl': return renderSSL(result);
     case 'headers': return renderHeaders(result);
     default: return `<pre style="color:var(--text-dim);font-size:11px;">${esc(JSON.stringify(result, null, 2))}</pre>`;
@@ -479,17 +737,22 @@ function renderModuleResult(module, result) {
 
 // ── Nmap ──────────────────────────────────────────────────────────────────────
 
-function renderNmap(result) {
+function renderNmap(result, targets = []) {
   if (!result.hosts || !result.hosts.length) return '<div class="alert alert-info">No hosts found.</div>';
+
+  const labelMap = {};
+  targets.forEach(t => { if (t && t.label && t.host) labelMap[t.host] = t.label; });
 
   return result.hosts.map(host => {
     const ip = host.addresses?.[0]?.addr || 'Unknown';
     const hostnames = host.hostnames?.join(', ') || '';
     const os = host.os_matches?.[0];
+    const label = labelMap[ip];
 
     return `
     <div class="card">
       <div class="card-title">
+        ${label ? `<span style="color:var(--accent)">${esc(label)}</span><span style="color:var(--text-faint); font-weight:400; font-size:13px;"> — </span>` : ''}
         ${esc(ip)} ${hostnames ? `<span style="color:var(--text-dim); font-weight:400;">— ${esc(hostnames)}</span>` : ''}
         <span class="badge badge-${host.status === 'up' ? 'completed' : 'failed'}">${host.status}</span>
       </div>
@@ -588,29 +851,6 @@ function renderGobusterDns(result) {
     <thead><tr><th>Subdomain</th></tr></thead>
     <tbody>${result.subdomains.map(s => `<tr><td class="mono">${esc(s)}</td></tr>`).join('')}</tbody>
   </table>`;
-}
-
-// ── Nikto ─────────────────────────────────────────────────────────────────────
-
-function renderNikto(result) {
-  if (!result.vulnerabilities?.length) return '<div class="alert alert-info">No vulnerabilities found by Nikto.</div>';
-
-  return `
-  <div style="font-size:13px; color:var(--text-dim); margin-bottom:12px;">
-    Found <strong style="color:var(--text)">${result.vulnerabilities.length}</strong> potential issues
-  </div>
-  ${result.vulnerabilities.map(v => `
-  <div class="cve-card ${esc(v.severity)}" style="margin-bottom:8px;">
-    <div class="cve-header">
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <span class="badge badge-${esc(v.severity)}">${esc(v.severity)}</span>
-        ${v.id ? `<span class="tag">${esc(v.id)}</span>` : ''}
-        ${v.url ? `<span class="mono" style="font-size:11px;">${esc(v.url)}</span>` : ''}
-      </div>
-    </div>
-    <div class="cve-desc" style="margin-top:6px;">${esc(v.msg)}</div>
-    ${v.references ? `<div class="cve-refs" style="margin-top:4px;">Refs: ${esc(v.references)}</div>` : ''}
-  </div>`).join('')}`;
 }
 
 // ── SSL/TLS ───────────────────────────────────────────────────────────────────
