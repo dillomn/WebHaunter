@@ -38,7 +38,8 @@ async def run_nmap(targets: list[str] | str, ports: str = "top1000", progress_ca
         if progress_callback:
             await progress_callback("nmap", 50, "Scan running, waiting for results...")
 
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=7200)
+        timeout = max(600, len(targets) * 600)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
 
         if progress_callback:
             await progress_callback("nmap", 90, "Parsing results...")
@@ -55,7 +56,8 @@ async def run_nmap(targets: list[str] | str, ports: str = "top1000", progress_ca
 
     except asyncio.TimeoutError:
         proc.kill()
-        return {"error": "nmap scan timed out after 5 minutes"}
+        minutes = max(10, len(targets) * 10)
+        return {"error": f"nmap scan timed out after {minutes} minutes"}
     except FileNotFoundError:
         return {"error": "nmap is not installed or not in PATH"}
 
