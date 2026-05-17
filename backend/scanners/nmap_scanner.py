@@ -38,7 +38,7 @@ async def run_nmap(targets: list[str] | str, ports: str = "top1000", progress_ca
         if progress_callback:
             await progress_callback("nmap", 50, "Scan running, waiting for results...")
 
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=7200)
 
         if progress_callback:
             await progress_callback("nmap", 90, "Parsing results...")
