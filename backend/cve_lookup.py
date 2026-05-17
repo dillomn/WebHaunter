@@ -44,7 +44,7 @@ def _should_skip_cve_lookup(product: str, version: Optional[str]) -> tuple[bool,
     return False, ""
 
 
-async def lookup_cves_for_service(product: str, version: Optional[str] = None) -> list[dict]:
+async def lookup_cves_for_service(product: str, version: Optional[str] = None, cpe: Optional[str] = None) -> list[dict]:
     """Query the NVD API for CVEs matching a service product/version."""
     if not product:
         return []
@@ -53,20 +53,13 @@ async def lookup_cves_for_service(product: str, version: Optional[str] = None) -
     if skip:
         return []
 
-    # Build a tight keyword — product + version gives the most precise results.
-    # Product-only searches (no version) tend to be noisy; cap results lower.
-    if version:
-        keyword = f"{product} {version}"
-        results_per_page = 10
+    if cpe:
+        # CPE-based lookup is version-exact — far less noise than keyword search
+        params = {"cpeName": cpe, "resultsPerPage": 10, "startIndex": 0}
+    elif version:
+        params = {"keywordSearch": f"{product} {version}", "resultsPerPage": 10, "startIndex": 0}
     else:
-        keyword = product
-        results_per_page = 5
-
-    params = {
-        "keywordSearch": keyword,
-        "resultsPerPage": results_per_page,
-        "startIndex": 0,
-    }
+        params = {"keywordSearch": product, "resultsPerPage": 5, "startIndex": 0}
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -86,22 +79,23 @@ async def enrich_nmap_results_with_cves(nmap_results: dict) -> dict:
 
     # Deduplicate: same product+version across ports → look up once, share result
     seen: dict[str, list] = {}  # "product|version" -> cves
-    tasks_needed: list[tuple[str, str, Optional[str]]] = []  # (key, product, version)
+    tasks_needed: list[tuple[str, str, Optional[str], Optional[str]]] = []  # (key, product, version, cpe)
 
     for host in nmap_results.get("hosts", []):
         for port in host.get("ports", []):
             product = port.get("product") or port.get("service")
             version = port.get("version")
+            cpe = port.get("cpe", [None])[0] if port.get("cpe") else None
             if not product:
                 continue
-            key = f"{product}|{version or ''}"
+            key = f"{product}|{version or ''}|{cpe or ''}"
             if key not in seen:
-                seen[key] = None  # placeholder
-                tasks_needed.append((key, product, version))
+                seen[key] = None
+                tasks_needed.append((key, product, version, cpe))
 
-    # Fetch CVEs for unique product/version combos only
-    for i, (key, product, version) in enumerate(tasks_needed):
-        cves = await lookup_cves_for_service(product, version)
+    # Fetch CVEs for unique product/version/cpe combos only
+    for i, (key, product, version, cpe) in enumerate(tasks_needed):
+        cves = await lookup_cves_for_service(product, version, cpe)
         seen[key] = cves
         if i < len(tasks_needed) - 1:
             await asyncio.sleep(0.2)  # NVD rate limit: 5 req/s without API key
@@ -111,10 +105,10 @@ async def enrich_nmap_results_with_cves(nmap_results: dict) -> dict:
         for port in host.get("ports", []):
             product = port.get("product") or port.get("service")
             version = port.get("version")
+            cpe = port.get("cpe", [None])[0] if port.get("cpe") else None
             if product:
-                key = f"{product}|{version or ''}"
+                key = f"{product}|{version or ''}|{cpe or ''}"
                 port["cves"] = seen.get(key, [])
-                # Flag if CVE lookup was skipped so the UI can explain why
                 skip, reason = _should_skip_cve_lookup(product, version)
                 if skip:
                     port["cve_skip_reason"] = reason

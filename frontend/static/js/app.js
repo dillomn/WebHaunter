@@ -801,12 +801,19 @@ function renderNmap(result, targets = []) {
         <span class="badge badge-${host.status === 'up' ? 'completed' : 'failed'}">${host.status}</span>
       </div>
       ${os ? `<div style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">OS: ${esc(os.name)} (${os.accuracy}% confidence)</div>` : ''}
-      ${renderPortTable(host.ports || [])}
+      ${renderPortTable(host.ports || [], ip)}
     </div>`;
   }).join('');
 }
 
-function renderPortTable(ports) {
+function portLink(ip, port, protocol) {
+  if (protocol !== 'tcp') return `<strong class="mono">${port}/${protocol}</strong>`;
+  const scheme = (port === 443 || port === 8443) ? 'https' : 'http';
+  const url = `${scheme}://${ip}:${port}`;
+  return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="mono port-link">${port}/${protocol}</a>`;
+}
+
+function renderPortTable(ports, ip = '') {
   if (!ports.length) return '<div style="color:var(--text-dim); font-size:13px;">No open ports found.</div>';
 
   const rows = ports.map(p => {
@@ -818,7 +825,7 @@ function renderPortTable(ports) {
 
     return `
     <tr>
-      <td><strong class="mono">${p.port}/${p.protocol}</strong></td>
+      <td><strong class="mono">${portLink(ip, p.port, p.protocol)}</strong></td>
       <td><span class="badge badge-${p.state === 'open' ? 'completed' : 'pending'}">${p.state}</span></td>
       <td>${esc(p.service || '—')}</td>
       <td>${esc([p.product, p.version].filter(Boolean).join(' ') || '—')}</td>

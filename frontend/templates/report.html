@@ -205,8 +205,9 @@
 <h2 class="section-title">Service Discovery (Nmap)</h2>
 
 {% for host in scan.results.nmap.get('hosts', []) %}
+{% set host_ip = host.addresses[0].addr if host.addresses else 'unknown' %}
 <h3 class="sub-title">
-  Host: {{ host.addresses[0].addr if host.addresses else 'Unknown' }}
+  Host: {{ host_ip }}
   {% if host.hostnames %} — {{ host.hostnames | join(', ') }}{% endif %}
 </h3>
 
@@ -232,7 +233,14 @@
   <tbody>
     {% for port in host.ports %}
     <tr>
-      <td><strong>{{ port.port }}</strong></td>
+      <td>
+        {% set scheme = 'https' if port.port in [443, 8443] else 'http' %}
+        {% if port.protocol == 'tcp' %}
+          <a href="{{ scheme }}://{{ host_ip }}:{{ port.port }}" style="color:#c084fc; text-decoration:none; font-weight:700;">{{ port.port }}</a>
+        {% else %}
+          <strong>{{ port.port }}</strong>
+        {% endif %}
+      </td>
       <td>{{ port.protocol }}</td>
       <td>{{ port.state }}</td>
       <td>{{ port.service or '—' }}</td>

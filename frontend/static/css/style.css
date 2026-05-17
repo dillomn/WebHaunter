@@ -150,8 +150,12 @@ input[type=text], input[type=email], input[type=password], input[type=url], inpu
   box-sizing: border-box;
 }
 input[type=time]::-webkit-calendar-picker-indicator { filter: invert(1) opacity(0.4); cursor: pointer; }
-input[type=time]::-webkit-datetime-edit-fields-wrapper { color: var(--text); }input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+input[type=time]::-webkit-datetime-edit-fields-wrapper { color: var(--text); }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 input::placeholder { color: var(--text-faint); }
+
+a.port-link { color: var(--accent); text-decoration: none; }
+a.port-link:hover { text-decoration: underline; }
 
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
 .btn {
