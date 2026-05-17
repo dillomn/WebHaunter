@@ -339,56 +339,100 @@ function selectPortPreset(preset) {
   if (row) row.classList.toggle('hidden', preset !== 'custom');
 }
 
-function importTargetsFromJSON(input) {
+function parseCSVLine(line) {
+  const fields = [];
+  let cur = '', inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { inQuote = !inQuote; }
+    else if (ch === ',' && !inQuote) { fields.push(cur.trim()); cur = ''; }
+    else { cur += ch; }
+  }
+  fields.push(cur.trim());
+  return fields;
+}
+
+function looksLikeIP(s) {
+  return /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(s.trim());
+}
+
+function importTargetsFromFile(input) {
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = (e) => {
-    try {
-      let data = JSON.parse(e.target.result);
+    const text = e.target.result;
+    const isCSV = file.name.toLowerCase().endsWith('.csv') || (
+      !file.name.toLowerCase().endsWith('.json') && text.trim().split('\n')[0].includes(',') && !text.trim().startsWith('{') && !text.trim().startsWith('[')
+    );
 
-      // Unwrap common wrapper keys: {clients:[...]}, {targets:[...]}, {hosts:[...]}, etc.
-      if (data && typeof data === 'object' && !Array.isArray(data)) {
-        const wrapKey = ['clients','targets','hosts','ips','data','items','records'].find(k => Array.isArray(data[k]));
-        if (wrapKey) data = data[wrapKey];
-      }
+    let lines = [];
 
-      let lines = [];
+    if (isCSV) {
+      const rows = text.trim().split('\n');
+      // Detect header row — skip if first row contains no IP-looking values
+      const firstData = parseCSVLine(rows[0]);
+      const startRow = firstData.every(f => !looksLikeIP(f)) ? 1 : 0;
 
-      if (Array.isArray(data)) {
-        for (const entry of data) {
-          if (typeof entry === 'string') {
-            lines.push(entry.trim());
-          } else if (typeof entry === 'object' && entry !== null) {
-            // Detect host field
-            const hostVal = entry.ip ?? entry.host ?? entry.address ?? entry.ip_address ?? entry.target ?? null;
-            // Detect label field
-            const labelVal = entry.name ?? entry.label ?? entry.client ?? entry.client_name ?? entry.hostname ?? null;
-            if (hostVal) {
-              lines.push(labelVal ? `${String(labelVal).trim()} | ${String(hostVal).trim()}` : String(hostVal).trim());
-            }
-          }
-        }
-      } else if (typeof data === 'object' && data !== null) {
-        // Plain {name: ip} object
-        for (const [k, v] of Object.entries(data)) {
-          if (typeof v === 'string') lines.push(`${k.trim()} | ${v.trim()}`);
+      for (let i = startRow; i < rows.length; i++) {
+        const cols = parseCSVLine(rows[i]);
+        if (!cols.length) continue;
+        const label = cols[0] || null;
+        // Collect all IP-looking columns (skip label col)
+        const ips = cols.slice(1).map(c => c.trim()).filter(c => looksLikeIP(c));
+        if (!ips.length) continue;
+        for (const ip of ips) {
+          lines.push(label ? `${label.trim()} | ${ip}` : ip);
         }
       }
 
       if (!lines.length) {
-        alert('No valid targets found in the JSON file.\n\nExpected formats:\n• [{name, ip}, ...]\n• [{client, address}, ...]\n• {"Client A": "1.2.3.4", ...}');
+        alert('No valid targets found in the CSV.\n\nExpected columns: Name, IP Address 1[, IP Address 2, ...]');
         input.value = '';
         return;
       }
+    } else {
+      try {
+        let data = JSON.parse(text);
 
-      const textarea = document.getElementById('scan-targets');
-      if (textarea) textarea.value = lines.join('\n');
-      input.value = '';
-    } catch {
-      alert('Failed to parse JSON file. Make sure it is valid JSON.');
-      input.value = '';
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+          const wrapKey = ['clients','targets','hosts','ips','data','items','records'].find(k => Array.isArray(data[k]));
+          if (wrapKey) data = data[wrapKey];
+        }
+
+        if (Array.isArray(data)) {
+          for (const entry of data) {
+            if (typeof entry === 'string') {
+              lines.push(entry.trim());
+            } else if (typeof entry === 'object' && entry !== null) {
+              const hostVal = entry.ip ?? entry.host ?? entry.address ?? entry.ip_address ?? entry.target ?? null;
+              const labelVal = entry.name ?? entry.label ?? entry.client ?? entry.client_name ?? entry.hostname ?? null;
+              if (hostVal) {
+                lines.push(labelVal ? `${String(labelVal).trim()} | ${String(hostVal).trim()}` : String(hostVal).trim());
+              }
+            }
+          }
+        } else if (typeof data === 'object' && data !== null) {
+          for (const [k, v] of Object.entries(data)) {
+            if (typeof v === 'string') lines.push(`${k.trim()} | ${v.trim()}`);
+          }
+        }
+
+        if (!lines.length) {
+          alert('No valid targets found in the JSON file.\n\nExpected formats:\n• [{name, ip}, ...]\n• [{client, address}, ...]\n• {"Client A": "1.2.3.4", ...}');
+          input.value = '';
+          return;
+        }
+      } catch {
+        alert('Failed to parse file. Make sure it is valid JSON or CSV.');
+        input.value = '';
+        return;
+      }
     }
+
+    const textarea = document.getElementById('scan-targets');
+    if (textarea) textarea.value = lines.join('\n');
+    input.value = '';
   };
   reader.readAsText(file);
 }
@@ -424,11 +468,11 @@ function renderNewScan(startAsSchedule = false) {
       <div class="form-group">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
           <label style="margin-bottom:0;">Targets — one per line</label>
-          <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('json-import-input').click()">Import JSON</button>
-          <input type="file" id="json-import-input" accept=".json,application/json" style="display:none" onchange="importTargetsFromJSON(this)">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('import-input').click()">Import JSON / CSV</button>
+          <input type="file" id="import-input" accept=".json,.csv,application/json,text/csv" style="display:none" onchange="importTargetsFromFile(this)">
         </div>
         <textarea id="scan-targets" rows="6" placeholder="Client Corp | 192.168.1.1&#10;Head Office | 10.0.0.0/24&#10;203.0.113.42&#10;Remote Access Server | 203.0.113.99"></textarea>
-        <div style="font-size:11px; color:var(--text-faint); margin-top:5px;">Format: <span style="color:var(--accent); font-family:monospace;">Label | host</span> — or import a JSON file.</div>
+        <div style="font-size:11px; color:var(--text-faint); margin-top:5px;">Format: <span style="color:var(--accent); font-family:monospace;">Label | host</span> — or import a JSON / CSV file.</div>
       </div>
     </div>
 
